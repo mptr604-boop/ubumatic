@@ -49,8 +49,6 @@ and some of the packages (Flash, `w32codecs`, Gadu-Gadu plugin) no longer exist.
 Kept on purpose to stay faithful to the original, fixed in `ubumatic-lite.sh`:
 
 - The sudo password is stored in a variable and passed to `sudo -S` and to the xterm window.
-- Option "screen blanking" downloads an archive over plain HTTP and runs its script as root
-  (the download server no longer exists).
 - `sources.list` is replaced with third-party repositories (deb-multimedia, GetDeb)
   and `apt-get --force-yes` is used.
 - `--kernelnew` installs a kernel only when the version test matches the installed

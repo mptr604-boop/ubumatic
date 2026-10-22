@@ -30,7 +30,6 @@ readonly SECURITY_ARCHIVE=http://security.ubuntu.com/ubuntu
 readonly EXTRAS_ARCHIVE=http://extras.ubuntu.com/ubuntu
 readonly APT_COMPONENTS='main restricted universe multiverse'
 readonly KERNEL_MAINLINE_URL=http://kernel.ubuntu.com/~kernel-ppa/mainline/
-readonly BULBON_URL=http://www.bagbit.pl/download/bulbon.tar.gz # dead link, see README
 readonly SOURCES_BACKUP=/etc/apt/sources.list.backup_l1
 readonly BOLD=$'\e[1m'
 readonly RESET=$'\e[0m'
@@ -73,8 +72,6 @@ load_messages_pl() {
 	T[configuring_repo]='Trwa konfigurowanie repozytorium'
 	T[repo_hint]=$'Jeśli nie zaznaczyłeś opcji, która ustawia repozytorium, to\nwtedy nie wszystkie pakiety mogą zostać zainstalowane'
 	T[install_failed]='Instalacja/aktualizacja nie powiodła się. Naciśnij enter'
-	T[bulbon_dl]='Trwa pobieranie i instalowanie Bulbona'
-	T[bulbon_fail]='Instalacja Bulbona nie powiodła się'
 	T[repairing]='Trwa sprawdzanie i w razie czego naprawianie problemów'
 	T[ask_clean]=$'Czy chcesz usunąć pobrane pliki, aby\nzwolnić trochę miejsca na dysku'
 	T[cleaning]='Usuwanie pobranych plików'
@@ -159,8 +156,6 @@ load_messages_en() {
 	T[configuring_repo]='Configuration repository loading'
 	T[repo_hint]=$'Not all packages can be installed if you have not\nselected an option that sets the repository'
 	T[install_failed]='Installation/update failed. Press enter'
-	T[bulbon_dl]='Downloading and installing the Bulbon'
-	T[bulbon_fail]='Bulbon install failure'
 	T[repairing]='Checking and fixing the problems if neccesary'
 	T[ask_clean]=$'Do you want to remove files to free\nup some hard disk space'
 	T[cleaning]='Deleting downloaded files'
@@ -472,18 +467,6 @@ set_gui_window_size() {
 	fi
 }
 
-screen_blanking_label() {
-	if is_polish; then
-		if [[ $LOGIC_RELEASE == lucid ]]; then
-			printf 'Wyłącz wygaszanie ekranu podczas oglądania pełnoekranowych filmów\nFlash i HTML5 w przeglądarce Firefox'
-		else
-			printf 'Wyłącz wygaszanie ekranu podczas oglądania pełnoekranowych\nfilmów Flash i HTML5 w przeglądarce Firefox'
-		fi
-	else
-		printf 'Disable screen blanking while watching Flash and HTML5\nfull screen movies in Firefox browser'
-	fi
-}
-
 # checklist rows: state, id, label
 build_checklist_rows() {
 	ROWS=(
@@ -497,7 +480,7 @@ build_checklist_rows() {
 	if is_polish; then
 		ROWS+=(FALSE 7 "${T[opt_totem]}")
 	fi
-	ROWS+=(FALSE 8 "$(screen_blanking_label)" FALSE 9 "${T[opt_tweak]}")
+	ROWS+=(FALSE 9 "${T[opt_tweak]}")
 	if [[ $LOGIC_RELEASE == lucid ]]; then
 		if is_polish; then ROWS+=(FALSE 0 "${T[opt_gadu]}"); fi
 	else
@@ -552,9 +535,6 @@ parse_selection() {
 				else
 					su "$LOGNAME" -c "$(declare -p LOGIC_RELEASE); $(declare -f configure_totem); configure_totem"
 				fi
-				;;
-			8)
-				WANT_BULBON=1
 				;;
 			9)
 				WANT_TWEAK_PPA=1
@@ -627,17 +607,6 @@ run_apt_in_terminal() {
 	xterm -title Ubumatic -geometry "$(xterm_geometry)" -e bash -c "$(declare -f apt_worker); apt_worker"
 }
 
-# SECURITY: the archive is fetched over plain HTTP and its script runs as root.
-install_bulbon() {
-	wget -q "$BULBON_URL" -O "$WORK_DIR/bulbon.tar.gz" \
-		&& tar xzvf "$WORK_DIR/bulbon.tar.gz" -C "$WORK_DIR/" \
-		&& sudo_run mkdir -p /opt/bagbit \
-		&& sudo_run mv "$WORK_DIR/bulbon.sh" /opt/bagbit/ \
-		&& sudo_run chmod 755 /opt/bagbit/bulbon.sh \
-		&& sudo_run ln -sf /opt/bagbit/bulbon.sh /etc/init.d/bulbon \
-		&& sudo_run update-rc.d bulbon defaults
-}
-
 fix_broken_packages_gui() {
 	for _ in 1 2; do
 		sudo_run dpkg -a --configure
@@ -647,7 +616,7 @@ fix_broken_packages_gui() {
 
 run_gui() {
 	local selection rc
-	WANT_REPO=0 WANT_EXTRAS_REPO=0 WANT_UPGRADE=0 WANT_BULBON=0 WANT_TWEAK_PPA=0 WANT_TELEPATHY_PPA=0
+	WANT_REPO=0 WANT_EXTRAS_REPO=0 WANT_UPGRADE=0 WANT_TWEAK_PPA=0 WANT_TELEPATHY_PPA=0
 	PACKAGES=()
 
 	case $RELEASE in
@@ -690,7 +659,7 @@ run_gui() {
 	selection=${selection/3:4:5:6/b}
 	parse_selection "$selection"
 
-	if [[ $WANT_REPO -eq 1 || $WANT_UPGRADE -eq 1 || $WANT_BULBON -eq 1 || $WANT_TWEAK_PPA -eq 1 || $WANT_TELEPATHY_PPA -eq 1 || ${#PACKAGES[@]} -gt 0 ]]; then
+	if [[ $WANT_REPO -eq 1 || $WANT_UPGRADE -eq 1 || $WANT_TWEAK_PPA -eq 1 || $WANT_TELEPATHY_PPA -eq 1 || ${#PACKAGES[@]} -gt 0 ]]; then
 		run_with_progress "${T[checking_net]}" check_internet
 		rc=$?
 		if [[ $rc -eq 4 || $rc -eq 143 ]]; then
@@ -711,15 +680,6 @@ run_gui() {
 	if [[ ${#PACKAGES[@]} -gt 0 || $WANT_REPO -eq 1 || $WANT_UPGRADE -eq 1 ]]; then
 		[[ ${#PACKAGES[@]} -gt 0 ]] && zenity --warning --title Ubumatic --text "${T[repo_hint]}" --timeout 5
 		run_apt_in_terminal
-	fi
-
-	if [[ $WANT_BULBON -eq 1 ]]; then
-		make_work_dir
-		if run_with_progress "${T[bulbon_dl]}" install_bulbon; then
-			/opt/bagbit/bulbon.sh
-		else
-			zenity --error --title Ubumatic --text "${T[bulbon_fail]}"
-		fi
 	fi
 
 	if [[ ${#PACKAGES[@]} -gt 0 || $WANT_REPO -eq 1 || $WANT_UPGRADE -eq 1 ]]; then
